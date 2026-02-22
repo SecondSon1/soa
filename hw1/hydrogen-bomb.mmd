@@ -1,0 +1,98 @@
+flowchart LR
+  Buyer([Покупатель]) --> UI["Интерфейс"]
+  Seller([Продавец]) --> UI
+  Support([Поддержка]) --> UI
+
+  UI --> GW["API Gateway"]
+
+  PSP[(Сервис оплаты)]
+  MSG[(Провайдеры почты/push)]
+  METSTORE[(Открытое хранилище метрик/событий)]
+
+  subgraph MP["Маркетплейс"]
+    AUTH["Сервис для авторизации/аутентификации"]
+    ACCM["Сервис для менеджмента аккаунтов"]
+    LOG["Сервис логистики"]
+    DISC["Сервис обнаружения (discovery)"]
+    PAY["Сервис платежей"]
+    NOTIF["Сервис уведомлений"]
+    MET["Сервис сбора метрик"]
+
+    CAT["Сервис каталогов"]
+    PROMO["Сервис купонов/промоакций"]
+    MOD["Сервис модерации"]
+
+    SRCH["Сервис поиска (API)"]
+    IDX["Сервис выгрузки данных каталогов для поиска"]
+    SIDX[("Search Index")]
+
+    CART["Сервис корзины"]
+    ORD["Сервис заказов"]
+
+    AUTHDB[("БД авторизаций")]
+    ACCDB[("БД аккаунтов")]
+    CATDB[("БД продуктов")]
+    PROMODB[("БД промоакций")]
+    MODDB[("БД модерации")]
+    CARTDB[("БД корзины")]
+    ORDDB[("БД заказов")]
+    PAYDB[("БД платежей")]
+    NOTIFDB[("БД уведомлений")]
+    DISCCACHE[("Кэш discovery")]
+    LOGDB[("БД логистики")]
+  end
+
+  GW --> AUTH
+  GW --> ACCM
+  GW --> DISC
+  GW --> SRCH
+  GW --> CART
+  GW --> ORD
+  GW --> |только поддержка| MOD
+
+  AUTH --> AUTHDB
+  ACCM --> ACCDB
+  CAT --> CATDB
+  PROMO --> PROMODB
+  MOD --> MODDB
+  CART --> CARTDB
+  ORD --> ORDDB
+  PAY --> PAYDB
+  NOTIF --> NOTIFDB
+  DISC --> DISCCACHE
+  LOG --> LOGDB
+
+  CAT --> |проверка| MOD
+  ORD -->|валидация| CAT
+  ORD -->|наличие| LOG
+  ORD -->|наложение скидок| PROMO
+  ORD -->|совершить транзакцию| PAY
+  ORD -->|вытащить корзину| CART
+
+  SRCH -->|поиск| SIDX
+  DISC -->|формирование ленты| SIDX
+  IDX --> |формирование снапшотов| CAT
+  IDX --> |формирование снапшотов| LOG
+  IDX --> |обновление индекса| SIDX
+
+  NOTIF -->|deliver| MSG
+  PAY --> PSP
+
+  ORD -. событие .-> NOTIF
+  ACCM -. событие .-> NOTIF
+  AUTH -. вход в аккаунт .-> NOTIF
+
+  AUTH -. логи .-> MET
+  ACCM -. логи .-> MET
+  CAT -. логи .-> MET
+  PROMO -. логи .-> MET
+  MOD -. логи .-> MET
+  SRCH -. логи .-> MET
+  DISC -. логи .-> MET
+  CART -. логи .-> MET
+  ORD -. логи .-> MET
+  PAY -. логи .-> MET
+  NOTIF -. логи .-> MET
+  LOG -. логи .-> MET
+
+  MET -->|сохранение| METSTORE

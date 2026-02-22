@@ -1,0 +1,56 @@
+flowchart LR
+  Buyer([Покупатель]) --> UI["Интерфейс"]
+  Seller([Продавец]) --> UI
+  Support([Поддержка]) --> UI
+  UI --> GW["API Gateway"]
+
+  subgraph MP["Маркетплейс"]
+    AUTH["Сервис авторизации"]
+    ACC["Сервис менеджмента аккаунтов"]
+    SEL["Сервис каталогов"]
+    SRCH["Сервис поиска & discovery"]
+    COM["Сервис обработки заказов и платежей"]
+    NOTIF["Сервис уведомлений"]
+    ANIN["Сервис сбора данных"]
+
+    IDDB[("БД авторизаций")]
+    ACCDB[("БД аккаунтов")]
+    SELDB[("БД продуктов")]
+    SRCHIDX[("Индекс поиска")]
+    COMDB[("БД состояния платежей")]
+    NOTIFDB[("БД уведомлений")]
+    RAW[("DWH/DL/DLH (продуктовые)")]
+    WH[("БД метрик")]
+  end
+
+  GW --> AUTH
+  GW --> ACC
+  GW --> SEL
+  GW --> SRCH
+  GW --> COM
+
+  COM -->|Проверка доступности товара| SEL
+  SRCH -->|Регулярные снапшоты для обновления индекса| SEL
+  COM -->|Обновления состояний| NOTIF
+  ACC -->|Уведомления об изменении настроек| NOTIF
+  SRCH -->|Рекомендации| NOTIF
+
+  AUTH --> IDDB
+  ACC --> ACCDB
+  SEL --> SELDB
+  SRCH --> SRCHIDX
+  COM --> COMDB
+  NOTIF --> NOTIFDB
+
+  COM -->|Эквайринг| PSP[(Сервис оплаты)]
+  NOTIF -->|Отправка| MSG[(Провайдеры почты/push)]
+
+  AUTH -. Логи .-> ANIN
+  ACC -. Логи .-> ANIN
+  SEL -. Логи .-> ANIN
+  SRCH -. Логи .-> ANIN
+  COM -. Логи .-> ANIN
+  NOTIF -. Логи .-> ANIN
+
+  ANIN --> RAW
+  ANIN --> WH
