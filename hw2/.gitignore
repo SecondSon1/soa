@@ -1,0 +1,5 @@
+/target
+/src/openapi_generated
+/.idea
+/.vscode
+/.DS_Store
