@@ -1,9 +1,12 @@
+use std::collections::HashMap;
+
 use rust_decimal::Decimal;
 use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
+use serde_json::json;
 
 use super::ApiError;
 use crate::models;
-use crate::types::Nullable;
+use crate::types::{Nullable, Object};
 
 pub(super) fn is_bad_input_db_error(error: &sqlx::Error) -> bool {
   let Some(db_error) = error.as_database_error() else {
@@ -45,5 +48,30 @@ pub(super) fn status_from_db(status: &str) -> Result<models::ProductStatus, ApiE
     "INACTIVE" => Ok(models::ProductStatus::Inactive),
     "ARCHIVED" => Ok(models::ProductStatus::Archived),
     other => Err(ApiError::InvalidStatus(other.to_owned())),
+  }
+}
+
+pub(super) fn error_response(error_code: models::ErrorCode, message: impl Into<String>) -> models::ErrorResponse {
+  models::ErrorResponse {
+    error_code,
+    message: message.into(),
+    details: None,
+  }
+}
+
+pub(super) fn validation_error_response(
+  field: impl Into<String>,
+  violation: impl Into<String>,
+) -> models::ErrorResponse {
+  let mut details = HashMap::new();
+  details.insert(
+    "errors".to_owned(),
+    Object(json!([{ "field": field.into(), "violation": violation.into() }])),
+  );
+
+  models::ErrorResponse {
+    error_code: models::ErrorCode::ValidationError,
+    message: "Request validation failed".to_owned(),
+    details: Some(Nullable::Present(details)),
   }
 }

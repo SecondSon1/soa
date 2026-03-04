@@ -15,7 +15,9 @@ use uuid::Uuid;
 
 use self::model::ProductRow;
 use self::queries::Queries;
-use self::utils::{decimal_from_f64, is_bad_input_db_error, nullable_to_option, status_to_db};
+use self::utils::{
+  decimal_from_f64, error_response, is_bad_input_db_error, nullable_to_option, status_to_db, validation_error_response,
+};
 use crate::apis::products::{
   CreateProductResponse, DeleteProductResponse, GetProductByIdResponse, ListProductsResponse, Products,
   UpdateProductResponse,
@@ -85,9 +87,9 @@ impl Products<ApiError> for ApiService {
   ) -> Result<CreateProductResponse, ApiError> {
     match self.create_product_in_db(body).await {
       Ok(product) => Ok(CreateProductResponse::Status201_ProductCreated(product)),
-      Err(ApiError::Db(db_error)) if is_bad_input_db_error(&db_error) => {
-        Ok(CreateProductResponse::Status400_InvalidInput)
-      }
+      Err(ApiError::Db(db_error)) if is_bad_input_db_error(&db_error) => Ok(
+        CreateProductResponse::Status400_RequestValidationFailed(validation_error_response("request", "invalid input")),
+      ),
       Err(other) => Err(other),
     }
   }
@@ -106,7 +108,10 @@ impl Products<ApiError> for ApiService {
     if updated.is_some() {
       Ok(DeleteProductResponse::Status204_ProductDeleted)
     } else {
-      Ok(DeleteProductResponse::Status404_ProductNotFound)
+      Ok(DeleteProductResponse::Status404_ProductNotFound(error_response(
+        models::ErrorCode::ProductNotFound,
+        "Product not found",
+      )))
     }
   }
 
@@ -124,7 +129,10 @@ impl Products<ApiError> for ApiService {
     if let Some(row) = row {
       Ok(GetProductByIdResponse::Status200_ProductFound(row.to_model()?))
     } else {
-      Ok(GetProductByIdResponse::Status404_ProductNotFound)
+      Ok(GetProductByIdResponse::Status404_ProductNotFound(error_response(
+        models::ErrorCode::ProductNotFound,
+        "Product not found",
+      )))
     }
   }
 
@@ -175,10 +183,13 @@ impl Products<ApiError> for ApiService {
   ) -> Result<UpdateProductResponse, ApiError> {
     match self.update_product_in_db(path_params.id, body).await {
       Ok(Some(product)) => Ok(UpdateProductResponse::Status200_ProductUpdated(product)),
-      Ok(None) => Ok(UpdateProductResponse::Status404_ProductNotFound),
-      Err(ApiError::Db(db_error)) if is_bad_input_db_error(&db_error) => {
-        Ok(UpdateProductResponse::Status400_InvalidInput)
-      }
+      Ok(None) => Ok(UpdateProductResponse::Status404_ProductNotFound(error_response(
+        models::ErrorCode::ProductNotFound,
+        "Product not found",
+      ))),
+      Err(ApiError::Db(db_error)) if is_bad_input_db_error(&db_error) => Ok(
+        UpdateProductResponse::Status400_RequestValidationFailed(validation_error_response("request", "invalid input")),
+      ),
       Err(other) => Err(other),
     }
   }
