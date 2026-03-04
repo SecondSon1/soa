@@ -5,11 +5,30 @@ use sqlx::query::{QueryAs, QueryScalar};
 use sqlx::{FromRow, Postgres};
 use uuid::Uuid;
 
-use crate::api::model::ProductRow;
+use crate::api::model::{ProductRow, UserRow};
 
 pub(super) struct Queries;
 
 impl Queries {
+  pub fn insert_user(email: String, password_hash: String) -> QueryAs<'static, Postgres, UserRow, PgArguments> {
+    sqlx::query_as::<_, UserRow>(
+      "INSERT INTO users (email, password_hash) \
+       VALUES ($1, $2) \
+       RETURNING id, email, password_hash, created_at",
+    )
+    .bind(email)
+    .bind(password_hash)
+  }
+
+  pub fn select_user_by_email(email: String) -> QueryAs<'static, Postgres, UserRow, PgArguments> {
+    sqlx::query_as::<_, UserRow>(
+      "SELECT id, email, password_hash, created_at \
+       FROM users \
+       WHERE email = $1",
+    )
+    .bind(email)
+  }
+
   pub fn insert_product(
     name: String,
     description: Option<String>,

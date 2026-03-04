@@ -15,6 +15,8 @@ use serde::Serialize;
 use serde_json::Value;
 use uuid::Uuid;
 
+use super::auth::AuthenticatedUserId;
+
 const X_REQUEST_ID_HEADER: HeaderName = HeaderName::from_static("x-request-id");
 const X_USER_ID_HEADER: HeaderName = HeaderName::from_static("x-user-id");
 
@@ -50,7 +52,7 @@ pub(super) async fn api_logging_middleware(mut request: Request, next: Next) -> 
   let request_id = Uuid::new_v4().to_string();
   let method = request.method().clone();
   let endpoint = request.uri().path().to_owned();
-  let user_id = extract_user_id(request.headers());
+  let request_user_id = extract_user_id(request.headers());
 
   let request_body = if is_mutating_method(&method) {
     let (parts, body) = request.into_parts();
@@ -73,6 +75,11 @@ pub(super) async fn api_logging_middleware(mut request: Request, next: Next) -> 
   let start = Instant::now();
   let mut response = next.run(request).await;
   response = normalize_validation_error_response(response).await;
+  let user_id = response
+    .extensions()
+    .get::<AuthenticatedUserId>()
+    .map(|value| value.0.clone())
+    .or(request_user_id);
   let duration_ms = start.elapsed().as_millis();
   let status_code = response.status().as_u16();
 

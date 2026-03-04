@@ -39,3 +39,11 @@ impl ProductRow {
     })
   }
 }
+
+#[derive(Debug, FromRow)]
+pub(super) struct UserRow {
+  pub id: Uuid,
+  pub email: String,
+  pub password_hash: String,
+  pub created_at: DateTime<Utc>,
+}
