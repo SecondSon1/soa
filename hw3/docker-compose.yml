@@ -1,0 +1,150 @@
+name: hw3
+
+services:
+  booking-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: booking
+      POSTGRES_USER: booking
+      POSTGRES_PASSWORD: booking
+    ports:
+      - "5433:5432"
+    volumes:
+      - booking-db-data:/var/lib/postgresql/data
+
+  flight-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: flight
+      POSTGRES_USER: flight
+      POSTGRES_PASSWORD: flight
+    ports:
+      - "5434:5432"
+    volumes:
+      - flight-db-data:/var/lib/postgresql/data
+
+  redis-master:
+    image: redis:8-alpine
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --save
+      - "60"
+      - "1"
+      - --protected-mode
+      - "no"
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-master-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis-replica:
+    image: redis:8-alpine
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --save
+      - "60"
+      - "1"
+      - --protected-mode
+      - "no"
+      - --replicaof
+      - redis-master
+      - "6379"
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    volumes:
+      - redis-replica-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis-sentinel:
+    image: redis:8-alpine
+    command:
+      - sh
+      - -c
+      - cp /opt/redis/sentinel.conf /tmp/sentinel.conf && redis-sentinel /tmp/sentinel.conf
+    depends_on:
+      redis-master:
+        condition: service_healthy
+      redis-replica:
+        condition: service_healthy
+    ports:
+      - "26379:26379"
+    volumes:
+      - ./infra/redis/sentinel.conf:/opt/redis/sentinel.conf:ro
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "26379", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  flight-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: flight-service
+    environment:
+      FLIGHT_GRPC_PORT: 9090
+      FLIGHT_DB_URL: jdbc:postgresql://flight-db:5432/flight
+      FLIGHT_DB_USER: flight
+      FLIGHT_DB_PASSWORD: flight
+      FLIGHT_GRPC_API_KEY: ${FLIGHT_GRPC_API_KEY:-docker-compose-api-key}
+      FLIGHT_REDIS_SENTINELS: redis-sentinel:26379
+      FLIGHT_REDIS_MASTER_ID: flight-cache-master
+      FLIGHT_REDIS_DATABASE: 0
+      FLIGHT_CACHE_TTL_SECONDS: 300
+    depends_on:
+      flight-db:
+        condition: service_started
+      redis-master:
+        condition: service_healthy
+      redis-replica:
+        condition: service_healthy
+      redis-sentinel:
+        condition: service_healthy
+    ports:
+      - "9090:9090"
+
+  booking-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: booking-service
+    environment:
+      BOOKING_HTTP_PORT: 8080
+      BOOKING_DB_URL: jdbc:postgresql://booking-db:5432/booking
+      BOOKING_DB_USER: booking
+      BOOKING_DB_PASSWORD: booking
+      FLIGHT_GRPC_HOST: flight-service
+      FLIGHT_GRPC_PORT: 9090
+      FLIGHT_GRPC_API_KEY: ${FLIGHT_GRPC_API_KEY:-docker-compose-api-key}
+      FLIGHT_GRPC_RETRY_MAX_ATTEMPTS: 3
+      FLIGHT_GRPC_RETRY_INITIAL_BACKOFF_MS: 100
+      FLIGHT_GRPC_RETRY_MAX_BACKOFF_MS: 400
+      FLIGHT_GRPC_RETRY_BACKOFF_MULTIPLIER: 2.0
+      FLIGHT_GRPC_CIRCUIT_BREAKER_FAILURE_THRESHOLD: 5
+      FLIGHT_GRPC_CIRCUIT_BREAKER_WINDOW_SECONDS: 30
+      FLIGHT_GRPC_CIRCUIT_BREAKER_OPEN_SECONDS: 15
+    depends_on:
+      - booking-db
+      - flight-service
+    ports:
+      - "8080:8080"
+
+volumes:
+  booking-db-data:
+  flight-db-data:
+  redis-master-data:
+  redis-replica-data:

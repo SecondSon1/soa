@@ -1,0 +1,45 @@
+erDiagram
+    BOOKING ||--o{ FLIGHT_SEAT_RESERVATION : references_via_booking_id
+
+    BOOKING {
+        uuid id PK
+        text user_id
+        uuid flight_id
+        text passenger_name
+        text passenger_email
+        int seat_count
+        bigint total_price_minor_units
+        char3 currency
+        text status
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    FLIGHT {
+        uuid id PK
+        varchar airline_code
+        varchar flight_number
+        char3 origin_iata
+        char3 destination_iata
+        timestamptz departure_time
+        timestamptz arrival_time
+        int total_seats
+        int available_seats
+        bigint price_minor_units
+        char3 currency
+        text status
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    FLIGHT_SEAT_RESERVATION {
+        uuid id PK
+        uuid booking_id UK
+        uuid flight_id FK
+        int seat_count
+        text status
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    FLIGHT ||--o{ FLIGHT_SEAT_RESERVATION : contains

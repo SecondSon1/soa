@@ -1,0 +1,104 @@
+syntax = "proto3";
+
+package flight.v1;
+
+option java_multiple_files = true;
+option java_package = "com.example.flight.contract";
+
+import "google/protobuf/timestamp.proto";
+
+enum FlightStatus {
+  FLIGHT_STATUS_UNSPECIFIED = 0;
+  FLIGHT_STATUS_SCHEDULED = 1;
+  FLIGHT_STATUS_DEPARTED = 2;
+  FLIGHT_STATUS_CANCELLED = 3;
+  FLIGHT_STATUS_COMPLETED = 4;
+}
+
+enum SeatReservationStatus {
+  SEAT_RESERVATION_STATUS_UNSPECIFIED = 0;
+  SEAT_RESERVATION_STATUS_ACTIVE = 1;
+  SEAT_RESERVATION_STATUS_RELEASED = 2;
+  SEAT_RESERVATION_STATUS_EXPIRED = 3;
+}
+
+message Flight {
+  string id = 1;
+  string airline_code = 2;
+  string flight_number = 3;
+  string origin = 4;
+  string destination = 5;
+  google.protobuf.Timestamp departure_time = 6;
+  google.protobuf.Timestamp arrival_time = 7;
+  int32 total_seats = 8;
+  int32 available_seats = 9;
+  int64 price_minor_units = 10;
+  string currency = 11;
+  FlightStatus status = 12;
+}
+
+message SearchFlightsRequest {
+  string origin = 1;
+  string destination = 2;
+  // Optional. If omitted, search is performed across all dates.
+  google.protobuf.Timestamp departure_date = 3;
+}
+
+message SearchFlightsResponse {
+  repeated Flight flights = 1;
+}
+
+message GetFlightRequest {
+  string flight_id = 1;
+}
+
+message ReserveSeatsRequest {
+  string flight_id = 1;
+  int32 seat_count = 2;
+  string booking_id = 3;
+}
+
+message ReserveSeatsResponse {
+  string reservation_id = 1;
+  SeatReservationStatus status = 2;
+  int32 remaining_available_seats = 3;
+}
+
+message ReleaseReservationRequest {
+  string booking_id = 1;
+}
+
+message ReleaseReservationResponse {
+  string reservation_id = 1;
+  SeatReservationStatus status = 2;
+  int32 restored_available_seats = 3;
+}
+
+service FlightService {
+  // Requires x-api-key metadata.
+  // Errors:
+  // - UNAUTHENTICATED: missing or invalid service credentials
+  // - INVALID_ARGUMENT: origin or destination is blank
+  rpc SearchFlights(SearchFlightsRequest) returns (SearchFlightsResponse);
+  // Requires x-api-key metadata.
+  // Errors:
+  // - UNAUTHENTICATED: missing or invalid service credentials
+  // - NOT_FOUND: flight does not exist
+  // - INVALID_ARGUMENT: flight_id is malformed
+  rpc GetFlight(GetFlightRequest) returns (Flight);
+  // Requires x-api-key metadata.
+  // Errors:
+  // - UNAUTHENTICATED: missing or invalid service credentials
+  // - NOT_FOUND: flight does not exist
+  // - INVALID_ARGUMENT: request fields are malformed
+  // - RESOURCE_EXHAUSTED: not enough available seats
+  // - FAILED_PRECONDITION: flight is not bookable or booking already has a conflicting reservation
+  rpc ReserveSeats(ReserveSeatsRequest) returns (ReserveSeatsResponse);
+  // Requires x-api-key metadata.
+  // Errors:
+  // - UNAUTHENTICATED: missing or invalid service credentials
+  // - NOT_FOUND: reservation for booking does not exist
+  // - INVALID_ARGUMENT: booking_id is malformed
+  // - FAILED_PRECONDITION: reservation cannot be released from its current status
+  rpc ReleaseReservation(ReleaseReservationRequest) returns (ReleaseReservationResponse);
+}
