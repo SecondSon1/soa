@@ -1,0 +1,5 @@
+target/
+task/
+.dockerignore
+.DS_Store
+*.md

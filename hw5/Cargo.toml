@@ -1,0 +1,3 @@
+[workspace]
+members = ["common", "producer", "aggregation", "integration-tests"]
+resolver = "2"

@@ -1,0 +1,17 @@
+FROM rust:1.95-bookworm AS builder
+RUN apt-get update && apt-get install -y cmake && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY Cargo.toml Cargo.lock* ./
+COPY aggregation/ aggregation/
+COPY avro/ avro/
+COPY common/ common/
+RUN mkdir -p producer/src && echo "fn main(){}" > producer/src/main.rs
+COPY producer/Cargo.toml producer/
+RUN mkdir -p integration-tests/src && touch integration-tests/src/lib.rs
+COPY integration-tests/Cargo.toml integration-tests/
+RUN cargo build --release --bin aggregation
+
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y ca-certificates curl && rm -rf /var/lib/apt/lists/*
+COPY --from=builder /app/target/release/aggregation /usr/local/bin/aggregation
+CMD ["aggregation"]

@@ -1,0 +1,148 @@
+{
+  "uid": "cinema-analytics",
+  "title": "Cinema Analytics",
+  "editable": true,
+  "timezone": "utc",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Retention Cohort Heatmap (D1 / D3 / D7)",
+      "type": "table",
+      "gridPos": {"h": 10, "w": 24, "x": 0, "y": 0},
+      "datasource": {"type": "grafana-clickhouse-datasource", "uid": "clickhouse"},
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "sql",
+          "editorType": "sql",
+          "format": 1,
+          "rawSql": "SELECT\n  toString(date) AS \"Cohort\",\n  round(maxIf(value * 100, dimension = '1'), 1) AS \"Day 1\",\n  round(maxIf(value * 100, dimension = '3'), 1) AS \"Day 3\",\n  round(maxIf(value * 100, dimension = '7'), 1) AS \"Day 7\"\nFROM daily_metrics FINAL\nWHERE metric_name = 'retention'\nGROUP BY date\nORDER BY date"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "center"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byRegexp", "options": "Day \\d+"},
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {"type": "color-background", "mode": "gradient"}
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {"color": "#FF4C4C", "value": null},
+                    {"color": "#FF9830", "value": 20},
+                    {"color": "#FFCB47", "value": 40},
+                    {"color": "#73BF69", "value": 60},
+                    {"color": "#1A7C11", "value": 80}
+                  ]
+                }
+              },
+              {
+                "id": "unit",
+                "value": "percent"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 2,
+      "title": "DAU (Daily Active Users)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 10},
+      "datasource": {"type": "grafana-clickhouse-datasource", "uid": "clickhouse"},
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "sql",
+          "editorType": "sql",
+          "format": 0,
+          "rawSql": "SELECT\n  toDateTime(date) AS time,\n  value AS \"DAU\"\nFROM daily_metrics FINAL\nWHERE metric_name = 'dau' AND dimension = ''\nORDER BY date"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "fillOpacity": 20,
+            "lineWidth": 2,
+            "pointSize": 5,
+            "showPoints": "always"
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 3,
+      "title": "View Conversion (VIEW_FINISHED / VIEW_STARTED)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 10},
+      "datasource": {"type": "grafana-clickhouse-datasource", "uid": "clickhouse"},
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "sql",
+          "editorType": "sql",
+          "format": 0,
+          "rawSql": "SELECT\n  toDateTime(date) AS time,\n  round(value * 100, 1) AS \"Conversion %\"\nFROM daily_metrics FINAL\nWHERE metric_name = 'view_conversion' AND dimension = ''\nORDER BY date"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "fillOpacity": 20,
+            "lineWidth": 2,
+            "pointSize": 5,
+            "showPoints": "always"
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 4,
+      "title": "Average Watch Time (seconds)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 18},
+      "datasource": {"type": "grafana-clickhouse-datasource", "uid": "clickhouse"},
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "sql",
+          "editorType": "sql",
+          "format": 0,
+          "rawSql": "SELECT\n  toDateTime(date) AS time,\n  round(value) AS \"Avg Watch Time (s)\"\nFROM daily_metrics FINAL\nWHERE metric_name = 'avg_watch_time' AND dimension = ''\nORDER BY date"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "fillOpacity": 20,
+            "lineWidth": 2,
+            "pointSize": 5,
+            "showPoints": "always"
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      }
+    }
+  ],
+  "schemaVersion": 39,
+  "version": 1,
+  "time": {"from": "now-30d", "to": "now"}
+}
