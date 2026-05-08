@@ -1,0 +1,64 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Warehouse Consumer",
+    "timezone": "browser",
+    "refresh": "5s",
+    "time": { "from": "now-15m", "to": "now" },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Consumer Lag by Partition",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+        "targets": [
+          {
+            "expr": "consumer_lag",
+            "legendFormat": "partition={{partition}}"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Events Processed per Second",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+        "targets": [
+          {
+            "expr": "rate(events_processed_total[1m])",
+            "legendFormat": "{{event_type}}"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Cassandra Write Errors",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+        "targets": [
+          {
+            "expr": "rate(cassandra_write_errors_total[1m])",
+            "legendFormat": "errors/s"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Event Processing Duration",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+        "targets": [
+          {
+            "expr": "rate(event_processing_duration_seconds_sum[1m]) / rate(event_processing_duration_seconds_count[1m])",
+            "legendFormat": "avg duration"
+          },
+          {
+            "expr": "histogram_quantile(0.99, rate(event_processing_duration_seconds_bucket[1m]))",
+            "legendFormat": "p99"
+          }
+        ]
+      }
+    ]
+  },
+  "overwrite": true
+}
