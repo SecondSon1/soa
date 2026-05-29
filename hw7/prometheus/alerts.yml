@@ -1,0 +1,11 @@
+groups:
+  - name: warehouse
+    rules:
+      - alert: HighConsumerLag
+        expr: consumer_lag > 100
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Consumer lag is high on partition {{ $labels.partition }}"
+          description: "Lag is {{ $value }} messages on partition {{ $labels.partition }}"
