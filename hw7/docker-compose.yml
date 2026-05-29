@@ -205,6 +205,13 @@ services:
       - producer
       - kafka-exporter
 
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./prometheus/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+
   grafana:
     image: grafana/grafana:11.1.0
     ports:

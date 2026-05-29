@@ -4,3 +4,5 @@ build/
 *.iml
 task/
 __pycache__/
+sli-report.json
+loadtest-results.json
