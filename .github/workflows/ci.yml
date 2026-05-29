@@ -202,3 +202,85 @@ jobs:
         if: always()
         working-directory: hw7
         run: docker compose down -v
+
+  sli-validation:
+    name: SLI Validation (E2E + Load + Metrics)
+    needs: [integration-tests]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start services
+        working-directory: hw7
+        run: docker compose up -d --build
+
+      - name: Wait for services to be healthy
+        working-directory: hw7
+        timeout-minutes: 15
+        run: |
+          echo "Waiting for producer..."
+          until curl -sf http://localhost:8082/health 2>/dev/null; do sleep 3; done
+          echo ""
+          echo "Waiting for consumer..."
+          until curl -sf http://localhost:8080/health 2>/dev/null; do sleep 3; done
+          echo ""
+          echo "Waiting for Prometheus..."
+          until curl -sf http://localhost:9090/-/ready 2>/dev/null; do sleep 3; done
+          echo ""
+          echo "All services healthy"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        run: pip install -r hw7/tests/requirements.txt
+
+      - name: Run E2E tests
+        working-directory: hw7
+        run: python -m pytest tests/test_e2e.py -v --tb=short
+
+      - name: Install k6
+        run: |
+          curl -sL https://github.com/grafana/k6/releases/download/v0.56.0/k6-v0.56.0-linux-amd64.tar.gz | tar xz
+          sudo mv k6-v0.56.0-linux-amd64/k6 /usr/local/bin/
+
+      - name: Run load test
+        working-directory: hw7
+        run: k6 run loadtest/load.js
+
+      - name: Validate SLI metrics from Prometheus
+        working-directory: hw7
+        run: python scripts/validate_sli.py
+
+      - name: Health check after validation
+        run: |
+          curl -sf http://localhost:8082/health | python3 -c "import sys,json; assert json.load(sys.stdin)['status']=='UP'"
+          curl -sf http://localhost:8080/health | python3 -c "import sys,json; assert json.load(sys.stdin)['status']=='UP'"
+          echo "Services still healthy after validation"
+
+      - name: Upload SLI report and load test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sli-validation-results
+          path: |
+            hw7/sli-report.json
+            hw7/loadtest-results.json
+
+      - name: Show service logs on failure
+        if: failure()
+        working-directory: hw7
+        run: |
+          for svc in consumer producer; do
+            echo "=== $svc ==="
+            docker compose logs "$svc" 2>&1 | tail -50
+          done
+          echo "=== docker compose ps ==="
+          docker compose ps -a
+
+      - name: Stop services
+        if: always()
+        working-directory: hw7
+        run: docker compose down -v
