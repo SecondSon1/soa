@@ -1,4 +1,4 @@
-name: hw6
+name: hw7
 
 services:
   zookeeper:
@@ -160,6 +160,11 @@ services:
       CASSANDRA_DATACENTER: datacenter1
       CASSANDRA_KEYSPACE: warehouse
       HTTP_PORT: 8080
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   producer:
     build:
@@ -172,6 +177,11 @@ services:
         condition: service_completed_successfully
       init-schema:
         condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8081/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   prometheus:
     image: prom/prometheus:v2.53.0
@@ -182,6 +192,7 @@ services:
       - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml
     depends_on:
       - consumer
+      - producer
 
   grafana:
     image: grafana/grafana:11.1.0

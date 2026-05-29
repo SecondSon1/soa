@@ -1,0 +1,143 @@
+name: CI
+
+on:
+  push:
+    branches: ["*"]
+  pull_request:
+    branches: ["*"]
+
+jobs:
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          java-version: "25"
+          distribution: "temurin"
+
+      - name: Consumer unit tests
+        working-directory: hw7/consumer
+        run: ./gradlew test --no-daemon
+
+      - name: Upload consumer test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: consumer-test-results
+          path: hw7/consumer/build/reports/tests/
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build all services
+        working-directory: hw7
+        run: docker compose build
+
+  integration-tests:
+    name: Integration Tests
+    needs: [build, unit-tests]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start services
+        working-directory: hw7
+        run: docker compose up -d --build
+
+      - name: Wait for services to be healthy
+        working-directory: hw7
+        timeout-minutes: 15
+        run: |
+          echo "Waiting for producer..."
+          until curl -sf http://localhost:8082/health 2>/dev/null; do sleep 3; done
+          echo ""
+          echo "Waiting for consumer..."
+          until curl -sf http://localhost:8080/health 2>/dev/null; do sleep 3; done
+          echo ""
+          echo "All services healthy"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        run: pip install -r hw7/tests/requirements.txt
+
+      - name: Run integration tests
+        working-directory: hw7
+        run: python -m pytest tests/test_integration.py -v --tb=short
+
+      - name: Show service logs on failure
+        if: failure()
+        working-directory: hw7
+        run: |
+          for svc in consumer producer; do
+            echo "=== $svc ==="
+            docker compose logs "$svc" 2>&1 | tail -50
+          done
+          echo "=== docker compose ps ==="
+          docker compose ps -a
+
+      - name: Stop services
+        if: always()
+        working-directory: hw7
+        run: docker compose down -v
+
+  e2e-tests:
+    name: E2E Tests
+    needs: [integration-tests]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start services
+        working-directory: hw7
+        run: docker compose up -d --build
+
+      - name: Wait for services to be healthy
+        working-directory: hw7
+        timeout-minutes: 15
+        run: |
+          echo "Waiting for producer..."
+          until curl -sf http://localhost:8082/health 2>/dev/null; do sleep 3; done
+          echo ""
+          echo "Waiting for consumer..."
+          until curl -sf http://localhost:8080/health 2>/dev/null; do sleep 3; done
+          echo ""
+          echo "All services healthy"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        run: pip install -r hw7/tests/requirements.txt
+
+      - name: Run E2E tests
+        working-directory: hw7
+        run: python -m pytest tests/test_e2e.py -v --tb=short
+
+      - name: Show service logs on failure
+        if: failure()
+        working-directory: hw7
+        run: |
+          for svc in consumer producer; do
+            echo "=== $svc ==="
+            docker compose logs "$svc" 2>&1 | tail -50
+          done
+          echo "=== docker compose ps ==="
+          docker compose ps -a
+
+      - name: Stop services
+        if: always()
+        working-directory: hw7
+        run: docker compose down -v

@@ -33,4 +33,11 @@ dependencies {
 
     implementation("ch.qos.logback:logback-classic:1.5.18")
     implementation("org.slf4j:slf4j-api:2.0.16")
+
+    testImplementation(kotlin("test"))
+    testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
+}
+
+tasks.test {
+    useJUnitPlatform()
 }

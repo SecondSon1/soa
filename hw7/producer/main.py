@@ -6,6 +6,7 @@ from confluent_kafka import SerializingProducer
 from confluent_kafka.schema_registry import SchemaRegistryClient
 from confluent_kafka.schema_registry.avro import AvroSerializer
 from confluent_kafka.serialization import StringSerializer
+from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 
 SCHEMA_REGISTRY_URL = "http://schema-registry:8081"
 KAFKA_BOOTSTRAP = "kafka:29092"
@@ -30,6 +31,23 @@ SCHEMA_STR = """{
   ]
 }"""
 
+REQUEST_COUNT = Counter(
+    "http_requests_total",
+    "Total HTTP requests",
+    ["method", "endpoint", "status"],
+)
+REQUEST_ERRORS = Counter(
+    "http_request_errors_total",
+    "Total HTTP request errors",
+    ["method", "endpoint", "error_type"],
+)
+REQUEST_DURATION = Histogram(
+    "http_request_duration_seconds",
+    "HTTP request duration in seconds",
+    ["method", "endpoint"],
+    buckets=(0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 5.0),
+)
+
 
 def make_producer():
     sr = SchemaRegistryClient({"url": SCHEMA_REGISTRY_URL})
@@ -45,28 +63,64 @@ producer = make_producer()
 
 
 class Handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path == "/metrics":
+            self._handle_metrics()
+        elif self.path == "/health":
+            self._handle_health()
+        else:
+            self._send(404, {"error": "not found"})
+
     def do_POST(self):
-        body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+        endpoint = self.path
+        start = time.monotonic()
+        try:
+            body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            event = {
+                "event_id": body.get("event_id", str(uuid.uuid4())),
+                "event_type": body["event_type"],
+                "timestamp": body.get("timestamp", int(time.time() * 1000)),
+                "product_id": body.get("product_id"),
+                "zone_id": body.get("zone_id"),
+                "quantity": body.get("quantity"),
+                "from_zone_id": body.get("from_zone_id"),
+                "to_zone_id": body.get("to_zone_id"),
+                "order_id": body.get("order_id"),
+                "order_items": body.get("order_items"),
+                "supplier_id": body.get("supplier_id"),
+            }
+            producer.produce(
+                TOPIC,
+                key=event["product_id"] or event.get("order_id") or event["event_id"],
+                value=event,
+            )
+            producer.flush()
 
-        event = {
-            "event_id": body.get("event_id", str(uuid.uuid4())),
-            "event_type": body["event_type"],
-            "timestamp": body.get("timestamp", int(time.time() * 1000)),
-            "product_id": body.get("product_id"),
-            "zone_id": body.get("zone_id"),
-            "quantity": body.get("quantity"),
-            "from_zone_id": body.get("from_zone_id"),
-            "to_zone_id": body.get("to_zone_id"),
-            "order_id": body.get("order_id"),
-            "order_items": body.get("order_items"),
-            "supplier_id": body.get("supplier_id"),
-        }
+            self._send(200, {"event_id": event["event_id"]})
+            REQUEST_COUNT.labels("POST", endpoint, "200").inc()
+        except Exception as e:
+            self._send(500, {"error": str(e)})
+            REQUEST_COUNT.labels("POST", endpoint, "500").inc()
+            REQUEST_ERRORS.labels("POST", endpoint, type(e).__name__).inc()
+        finally:
+            REQUEST_DURATION.labels("POST", endpoint).observe(time.monotonic() - start)
 
-        producer.produce(TOPIC, key=event["product_id"] or event.get("order_id") or event["event_id"], value=event)
-        producer.flush()
-
-        resp = json.dumps({"event_id": event["event_id"]}).encode()
+    def _handle_metrics(self):
+        output = generate_latest()
         self.send_response(200)
+        self.send_header("Content-Type", CONTENT_TYPE_LATEST)
+        self.end_headers()
+        self.wfile.write(output)
+
+    def _handle_health(self):
+        start = time.monotonic()
+        self._send(200, {"status": "UP"})
+        REQUEST_COUNT.labels("GET", "/health", "200").inc()
+        REQUEST_DURATION.labels("GET", "/health").observe(time.monotonic() - start)
+
+    def _send(self, status, body):
+        resp = json.dumps(body).encode()
+        self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.end_headers()
         self.wfile.write(resp)
