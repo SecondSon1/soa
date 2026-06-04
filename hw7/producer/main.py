@@ -59,7 +59,35 @@ def make_producer():
     })
 
 
-producer = make_producer()
+def build_event(body):
+    """Normalize an incoming request body into a full warehouse event.
+
+    Generates an event_id / timestamp when absent and fills every optional
+    field with None so the Avro serializer always sees the complete schema.
+    """
+    return {
+        "event_id": body.get("event_id") or str(uuid.uuid4()),
+        "event_type": body["event_type"],
+        "timestamp": body.get("timestamp") or int(time.time() * 1000),
+        "product_id": body.get("product_id"),
+        "zone_id": body.get("zone_id"),
+        "quantity": body.get("quantity"),
+        "from_zone_id": body.get("from_zone_id"),
+        "to_zone_id": body.get("to_zone_id"),
+        "order_id": body.get("order_id"),
+        "order_items": body.get("order_items"),
+        "supplier_id": body.get("supplier_id"),
+    }
+
+
+def partition_key(event):
+    """Kafka key: prefer product_id so all events for a product land on the
+    same partition (preserves per-product ordering); fall back to order_id,
+    then event_id."""
+    return event["product_id"] or event.get("order_id") or event["event_id"]
+
+
+producer = None
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -76,22 +104,10 @@ class Handler(BaseHTTPRequestHandler):
         start = time.monotonic()
         try:
             body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
-            event = {
-                "event_id": body.get("event_id", str(uuid.uuid4())),
-                "event_type": body["event_type"],
-                "timestamp": body.get("timestamp", int(time.time() * 1000)),
-                "product_id": body.get("product_id"),
-                "zone_id": body.get("zone_id"),
-                "quantity": body.get("quantity"),
-                "from_zone_id": body.get("from_zone_id"),
-                "to_zone_id": body.get("to_zone_id"),
-                "order_id": body.get("order_id"),
-                "order_items": body.get("order_items"),
-                "supplier_id": body.get("supplier_id"),
-            }
+            event = build_event(body)
             producer.produce(
                 TOPIC,
-                key=event["product_id"] or event.get("order_id") or event["event_id"],
+                key=partition_key(event),
                 value=event,
             )
             producer.flush()
@@ -129,4 +145,6 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
 
-HTTPServer(("0.0.0.0", 8081), Handler).serve_forever()
+if __name__ == "__main__":
+    producer = make_producer()
+    HTTPServer(("0.0.0.0", 8081), Handler).serve_forever()

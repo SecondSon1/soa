@@ -30,6 +30,18 @@ jobs:
           name: consumer-test-results
           path: hw7/consumer/build/reports/tests/
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install producer dependencies
+        run: pip install -r hw7/producer/requirements.txt pytest
+
+      - name: Producer unit tests
+        working-directory: hw7/producer
+        run: python -m pytest test_main.py -v
+
   build:
     name: Build
     runs-on: ubuntu-latest
