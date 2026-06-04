@@ -1,0 +1,40 @@
+groups:
+  - name: warehouse
+    rules:
+      - alert: HighConsumerLag
+        expr: consumer_lag > 100
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Consumer lag is high on partition {{ $labels.partition }}"
+          description: "Lag is {{ $value }} messages on partition {{ $labels.partition }}"
+
+      - alert: HighErrorRate
+        expr: |
+          (sum(rate(http_request_errors_total[2m])) / sum(rate(http_requests_total[2m]))) > 0.05
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "HTTP error rate exceeds 5%"
+          description: "Error rate is {{ $value | humanizePercentage }}"
+
+      - alert: HighLatency
+        expr: |
+          histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job="warehouse-producer"}[2m])) by (le)) > 1
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Producer p95 latency exceeds 1s"
+          description: "p95 latency is {{ $value }}s"
+
+      - alert: ServiceDown
+        expr: up == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.job }} is down"
+          description: "{{ $labels.instance }} has been unreachable for over 30 seconds"

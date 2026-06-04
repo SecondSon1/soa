@@ -1,0 +1,145 @@
+{
+  "id": null,
+  "uid": "infrastructure",
+  "title": "Infrastructure",
+  "schemaVersion": 38,
+  "version": 1,
+  "time": {"from": "now-15m", "to": "now"},
+  "refresh": "5s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Kafka — Consumer Group Lag",
+      "description": "Messages waiting to be consumed per topic/group. High lag = consumer can't keep up.",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "expr": "sum(kafka_consumergroup_lag) by (consumergroup, topic)",
+          "legendFormat": "{{consumergroup}} / {{topic}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {"unit": "short"}
+      }
+    },
+    {
+      "id": 2,
+      "title": "Kafka — Messages In per Second",
+      "description": "Rate of messages being produced to Kafka topics.",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "expr": "sum(rate(kafka_topic_partition_current_offset{topic!~\"__.*\"}[1m])) by (topic)",
+          "legendFormat": "{{topic}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {"unit": "ops"}
+      }
+    },
+    {
+      "id": 3,
+      "title": "Kafka — Broker & Partition Status",
+      "description": "Number of online brokers and total partitions. Drop = cluster issue.",
+      "type": "stat",
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 8},
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "expr": "count(kafka_brokers)",
+          "legendFormat": "Brokers"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "expr": "count(kafka_topic_partitions{topic!~\"__.*\"})",
+          "legendFormat": "Topics"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {"thresholds": {"steps": [{"value": 0, "color": "red"}, {"value": 1, "color": "green"}]}}
+      }
+    },
+    {
+      "id": 4,
+      "title": "Cassandra — Consumer Lag by Partition",
+      "description": "Application-level consumer lag per Kafka partition, as seen by the warehouse consumer.",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 8},
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "expr": "consumer_lag",
+          "legendFormat": "partition {{partition}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {"unit": "short"}
+      }
+    },
+    {
+      "id": 5,
+      "title": "Cassandra — Write Errors / sec",
+      "description": "Rate of failed Cassandra writes. Non-zero = storage layer problem.",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 8},
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "expr": "rate(cassandra_write_errors_total[1m])",
+          "legendFormat": "errors/s"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "thresholds": {"steps": [{"value": 0, "color": "green"}, {"value": 0.01, "color": "red"}]}
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "Cassandra — Event Processing Duration (p95)",
+      "description": "p95 time to process and write an event to Cassandra. Spike = Cassandra or consumer bottleneck.",
+      "type": "gauge",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "expr": "histogram_quantile(0.95, rate(event_processing_duration_seconds_bucket[1m]))",
+          "legendFormat": "p95"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "min": 0,
+          "max": 1,
+          "thresholds": {"steps": [{"value": 0, "color": "green"}, {"value": 0.1, "color": "yellow"}, {"value": 0.5, "color": "red"}]}
+        }
+      }
+    },
+    {
+      "id": 7,
+      "title": "Kafka — Under-replicated Partitions",
+      "description": "Partitions where replicas are behind. Non-zero = potential data loss risk.",
+      "type": "stat",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "expr": "sum(kafka_topic_partition_under_replicated_partition{topic!~\"__.*\"})",
+          "legendFormat": "under-replicated"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {"steps": [{"value": 0, "color": "green"}, {"value": 1, "color": "red"}]}
+        }
+      }
+    }
+  ]
+}
